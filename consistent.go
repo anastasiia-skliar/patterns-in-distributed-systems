@@ -35,10 +35,17 @@ func main() {
 	// Modify PartitionCount, ReplicationFactor and Load to increase or decrease
 	// relocation ratio.
 	cfg := consistent.Config{
-		PartitionCount:    271,
+		// Keys are distributed among partitions. Prime numbers are good to
+		// distribute keys uniformly. Select a big PartitionCount if you have
+		// too many keys.
+		PartitionCount: 13,
+		// Members are replicated on consistent hash ring. This number controls
+		// the number each member is replicated on the ring.
 		ReplicationFactor: 20,
-		Load:              1.25,
-		Hasher:            hasher{},
+		// Load is used to calculate average load. See the code, the paper and Google's
+		// blog post to learn about it.
+		Load:   1.05,
+		Hasher: hasher{},
 	}
 	c := consistent.New(members, cfg)
 
@@ -54,6 +61,20 @@ func main() {
 
 	// Get the new layout and compare with the previous
 	var changed int
+	for partID, member := range owners {
+		owner := c.GetPartitionOwner(partID)
+		if member != owner.String() {
+			changed++
+			fmt.Printf("partID: %3d moved to %s from %s\n", partID, owner.String(), member)
+		}
+	}
+	fmt.Printf("\n%d%% of the partitions are relocated\n", (100*changed)/cfg.PartitionCount)
+
+	// Remove member
+	c.Remove(fmt.Sprintf("node%d", 5))
+
+	// Get the new layout and compare with the previous
+	changed = 0
 	for partID, member := range owners {
 		owner := c.GetPartitionOwner(partID)
 		if member != owner.String() {
